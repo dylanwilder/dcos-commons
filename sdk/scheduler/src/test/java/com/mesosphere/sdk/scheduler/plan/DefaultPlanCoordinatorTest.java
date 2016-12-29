@@ -120,15 +120,13 @@ public class DefaultPlanCoordinatorTest {
         stateStore = new CuratorStateStore(
                 serviceSpecification.getName(),
                 testingServer.getConnectString());
-        stepFactory = new DefaultStepFactory(
-                mock(ConfigStore.class),
-                stateStore,
-                new DefaultOfferRequirementProvider(new DefaultTaskConfigRouter(new HashMap<>()), stateStore, UUID.randomUUID()));
+        stepFactory = new DefaultStepFactory(mock(ConfigStore.class), stateStore);
         phaseFactory = new DefaultPhaseFactory(stepFactory);
-        taskKiller = new DefaultTaskKiller(stateStore, taskFailureListener, schedulerDriver);
+        taskKiller = new DefaultTaskKiller(taskFailureListener, schedulerDriver);
 
         provider = new DefaultOfferRequirementProvider(new DefaultTaskConfigRouter(), stateStore, UUID.randomUUID());
-        planScheduler = new DefaultPlanScheduler(offerAccepter, new OfferEvaluator(stateStore, provider), taskKiller);
+        planScheduler = new DefaultPlanScheduler(
+                offerAccepter, new OfferEvaluator(stateStore, provider), stateStore, taskKiller);
         serviceSpecificationB = DefaultServiceSpec.newBuilder()
                 .name(SERVICE_NAME + "-B")
                 .role(TestConstants.ROLE)
@@ -184,7 +182,7 @@ public class DefaultPlanCoordinatorTest {
     @Test
     public void testOnePlanManagerComplete() throws Exception {
         final Plan plan = new DefaultPlanFactory(phaseFactory).getPlan(serviceSpecification);
-        ((Step) plan.getChildren().get(0).getChildren().get(0)).forceComplete();
+        plan.getChildren().get(0).getChildren().get(0).forceComplete();
         final DefaultPlanCoordinator coordinator = new DefaultPlanCoordinator(
                 Arrays.asList(new DefaultPlanManager(plan)), planScheduler);
         Assert.assertEquals(0, coordinator.processOffers(schedulerDriver, getOffers(SUFFICIENT_CPUS,

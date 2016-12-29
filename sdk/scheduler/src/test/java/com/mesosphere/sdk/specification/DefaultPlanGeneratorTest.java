@@ -3,8 +3,6 @@ package com.mesosphere.sdk.specification;
 import org.apache.curator.test.TestingServer;
 
 import com.mesosphere.sdk.config.ConfigStore;
-import com.mesosphere.sdk.config.ConfigurationUpdater;
-import com.mesosphere.sdk.offer.OfferRequirementProvider;
 import com.mesosphere.sdk.scheduler.DefaultScheduler;
 import com.mesosphere.sdk.scheduler.plan.Plan;
 import com.mesosphere.sdk.specification.yaml.RawPlan;
@@ -21,6 +19,7 @@ import org.mockito.MockitoAnnotations;
 
 import java.io.File;
 import java.util.Collections;
+import java.util.Map;
 
 /**
  * Tests for {@link DefaultPlanGenerator}.
@@ -35,7 +34,6 @@ public class DefaultPlanGeneratorTest {
 
     private StateStore stateStore;
     private ConfigStore<ServiceSpec> configStore;
-    private OfferRequirementProvider offerRequirementProvider;
 
     @BeforeClass
     public static void beforeAll() throws Exception {
@@ -64,15 +62,12 @@ public class DefaultPlanGeneratorTest {
                 serviceSpec,
                 testingServer.getConnectString(),
                 Collections.emptyList());
-        ConfigurationUpdater.UpdateResult updateResult = DefaultScheduler
-                .updateConfig(serviceSpec, stateStore, configStore);
-        offerRequirementProvider = DefaultScheduler.createOfferRequirementProvider(stateStore, updateResult.targetId);
 
         Assert.assertNotNull(serviceSpec);
 
-        DefaultPlanGenerator generator = new DefaultPlanGenerator(configStore, stateStore, offerRequirementProvider);
-        for (RawPlan rawPlan : rawServiceSpecification.getPlans().values()) {
-            Plan plan = generator.generate(rawPlan, serviceSpec.getPods());
+        DefaultPlanGenerator generator = new DefaultPlanGenerator(configStore, stateStore);
+        for (Map.Entry<String, RawPlan> entry : rawServiceSpecification.getPlans().entrySet()) {
+            Plan plan = generator.generate(entry.getValue(), entry.getKey(), serviceSpec.getPods());
             Assert.assertNotNull(plan);
             Assert.assertEquals(2, plan.getChildren().size());
             Assert.assertEquals(1, plan.getChildren().get(0).getChildren().size());

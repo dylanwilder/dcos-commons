@@ -3,7 +3,6 @@ package com.mesosphere.sdk.specification;
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.commons.collections.CollectionUtils;
 import com.mesosphere.sdk.config.ConfigTargetStore;
-import com.mesosphere.sdk.offer.OfferRequirementProvider;
 import com.mesosphere.sdk.scheduler.plan.*;
 import com.mesosphere.sdk.scheduler.plan.strategy.StrategyFactory;
 import com.mesosphere.sdk.specification.yaml.RawPhase;
@@ -23,29 +22,21 @@ public class DefaultPlanGenerator implements PlanGenerator {
     private static final Logger LOGGER = LoggerFactory.getLogger(DefaultPlanGenerator.class);
     private final DefaultStepFactory stepFactory;
 
-    public DefaultPlanGenerator(
-            ConfigTargetStore configTargetStore,
-            StateStore stateStore,
-            OfferRequirementProvider offerRequirementProvider) {
-        this.stepFactory = new DefaultStepFactory(configTargetStore,
-                stateStore, offerRequirementProvider);
+    public DefaultPlanGenerator(ConfigTargetStore configTargetStore, StateStore stateStore) {
+        this.stepFactory = new DefaultStepFactory(configTargetStore, stateStore);
     }
 
     @Override
-    public Plan generate(RawPlan rawPlan, Collection<PodSpec> podsSpecs) {
-        for (Map.Entry<String, RawPhase> entry : rawPlan.getPhases().entrySet()) {
-            entry.getValue().setName(entry.getKey());
-        }
-        final List<Phase> phases = rawPlan.getPhases().values().stream()
-                .map(rawPhase -> from(rawPhase, podsSpecs))
+    public Plan generate(RawPlan rawPlan, String planName, Collection<PodSpec> podsSpecs) {
+        final List<Phase> phases = rawPlan.getPhases().entrySet().stream()
+                .map(entry-> from(entry.getValue(), entry.getKey(), podsSpecs))
                 .collect(Collectors.toList());
-        return DefaultPlanFactory.getPlan(rawPlan.getName(), phases,
+        return DefaultPlanFactory.getPlan(planName, phases,
                 StrategyFactory.generateForPhase(rawPlan.getStrategy()));
     }
 
     @VisibleForTesting
-    protected Phase from(RawPhase rawPhase, Collection<PodSpec> podsSpecs) {
-        String name = rawPhase.getName();
+    protected Phase from(RawPhase rawPhase, String phaseName, Collection<PodSpec> podsSpecs) {
         String pod = rawPhase.getPod();
         List<RawStep> rawSteps = rawPhase.getSteps();
         String strategy = rawPhase.getStrategy();
@@ -68,11 +59,7 @@ public class DefaultPlanGenerator implements PlanGenerator {
                 List<String> taskNames = taskSpecs.stream()
                         .map(taskSpec -> taskSpec.getName())
                         .collect(Collectors.toList());
-                for (TaskSpec taskSpec : taskSpecs) {
-                    if (taskSpec.getGoal() == GoalState.RUNNING) {
-                        steps.add(from(podInstance, taskNames));
-                    }
-                }
+                steps.add(from(podInstance, taskNames));
             }
         } else {
             boolean allHaveIds = rawSteps.stream().allMatch(rawStep -> rawStep.getPodInstance().isPresent());
@@ -98,7 +85,7 @@ public class DefaultPlanGenerator implements PlanGenerator {
                         "or should be omitted for all steps.");
             }
         }
-        phase = DefaultPhaseFactory.getPhase(name, steps, StrategyFactory.generateForSteps(strategy));
+        phase = DefaultPhaseFactory.getPhase(phaseName, steps, StrategyFactory.generateForSteps(strategy));
         return phase;
     }
 
